@@ -14,6 +14,8 @@ import pytest
 
 from aiowithings import (
     ActivityDataFields,
+    DeviceModel,
+    DeviceType,
     MeasurementType,
     NotificationCategory,
     SleepDataFields,
@@ -237,6 +239,42 @@ async def test_get_devices(
         headers=HEADERS,
         data={"action": "getdevice"},
     )
+
+
+async def test_get_body_scan_2(
+    responses: aiointercept,
+    authenticated_client: WithingsClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Return a Body Scan 2 alongside an existing scale without model warnings."""
+    scale = json.loads(load_fixture("device.json"))["body"]["devices"][0]
+    body_scan_2 = {
+        **scale,
+        "type": "Scale",
+        "model": "Body Scan 2",
+        "model_id": 19,
+        "deviceid": "body-scan-2-device",
+        "hash_deviceid": "body-scan-2-hash",
+    }
+    responses.post(
+        f"{WITHINGS_URL}/v2/user",
+        payload={"status": 0, "body": {"devices": [body_scan_2, scale]}},
+    )
+
+    devices = await authenticated_client.get_devices()
+
+    assert len(devices) == 2
+    assert devices[0].model.value == 19
+    assert devices[0].model is DeviceModel.BODY_SCAN_2
+    assert devices[0].raw_model == "Body Scan 2"
+    assert devices[0].device_type is DeviceType.SCALE
+    assert devices[0].device_id == "body-scan-2-device"
+    assert devices[0].hashed_device_id == "body-scan-2-hash"
+    assert devices[1].model is DeviceModel.BODY_PLUS
+    assert devices[1].raw_model == scale["model"]
+    assert devices[1].device_id == scale["deviceid"]
+    assert devices[1].hashed_device_id == scale["hash_deviceid"]
+    assert "unsupported value" not in caplog.text
 
 
 async def test_get_new_device(
