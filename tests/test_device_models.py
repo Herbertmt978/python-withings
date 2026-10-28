@@ -22,23 +22,25 @@ def _device(model_id: int, model: str) -> dict[str, object]:
 
 
 @pytest.mark.parametrize(
-    ("model_id", "raw_model", "expected"),
+    ("model_id", "raw_model", "device_type", "expected"),
     [
-        (48, "BPM Vision", DeviceModel.BPM_VISION),
-        (71, "BeamO", DeviceModel.BEAMO),
+        (48, "BPM Vision", DeviceType.BLOOD_PRESSURE_MONITOR, DeviceModel.BPM_VISION),
+        (71, "BeamO", DeviceType.SMART_CONNECTED_THERMOMETER, DeviceModel.BEAMO),
     ],
 )
 def test_model_is_recognised(
     model_id: int,
     raw_model: str,
+    device_type: DeviceType,
     expected: DeviceModel,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Both ids come from a live account; see issue #886."""
-    device = Device.from_api(_device(model_id, raw_model))
+    """Parse the model and device type documented by the Withings API."""
+    device = Device.from_api({**_device(model_id, raw_model), "type": device_type})
 
     assert device.model is expected
     assert device.raw_model == raw_model
+    assert device.device_type is device_type
     assert "unsupported value" not in caplog.text
 
 

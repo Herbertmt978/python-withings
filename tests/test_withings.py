@@ -14,6 +14,7 @@ import pytest
 
 from aiowithings import (
     ActivityDataFields,
+    DeviceType,
     MeasurementType,
     NotificationCategory,
     SleepDataFields,
@@ -237,6 +238,48 @@ async def test_get_devices(
         headers=HEADERS,
         data={"action": "getdevice"},
     )
+
+
+@pytest.mark.parametrize(
+    ("model_id", "model", "device_type"),
+    [
+        (48, "BPM Vision", DeviceType.BLOOD_PRESSURE_MONITOR),
+        (71, "BeamO", DeviceType.SMART_CONNECTED_THERMOMETER),
+    ],
+)
+async def test_get_bpm_vision_and_beamo(
+    responses: aiointercept,
+    authenticated_client: WithingsClient,
+    model_id: int,
+    model: str,
+    device_type: DeviceType,
+) -> None:
+    """Return recognised devices alongside a scale without changing their identity."""
+    scale = json.loads(load_fixture("device.json"))["body"]["devices"][0]
+    device = {
+        **scale,
+        "type": device_type,
+        "model": model,
+        "model_id": model_id,
+        "deviceid": "new-device",
+        "hash_deviceid": "new-device-hash",
+    }
+    responses.post(
+        f"{WITHINGS_URL}/v2/user",
+        payload={"status": 0, "body": {"devices": [device, scale]}},
+    )
+
+    devices = await authenticated_client.get_devices()
+
+    assert len(devices) == 2
+    assert devices[0].model.value == model_id
+    assert devices[0].raw_model == model
+    assert devices[0].device_type is device_type
+    assert devices[0].device_id == "new-device"
+    assert devices[0].hashed_device_id == "new-device-hash"
+    assert devices[1].model.value == scale["model_id"]
+    assert devices[1].device_id == scale["deviceid"]
+    assert devices[1].hashed_device_id == scale["hash_deviceid"]
 
 
 async def test_get_new_device(
